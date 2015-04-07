@@ -19,8 +19,13 @@ module.exports = View.extend({
       // })
     }
 
-    this.changeDetected = this.changeDetected.bind(this);
-    this._observer.open(this.changeDetected);
+    this._changeDetected = this._changeDetected.bind(this);
+    this._observer.open(this._changeDetected);
+  },
+
+  _changeDetected: function(){
+    Backbone.trigger('state:change');
+    this.changeDetected.apply(this, arguments);
   },
 
   changeDetected: function(){
@@ -62,5 +67,5 @@ if(!observeSupport){
   setInterval(pollForChanges, POLL_INTERVAL_TIMEOUT);
 
   window.addEventListener('click', pollForChanges);
-  Backbone.on('sync', pollForChanges);
+  Backbone.on('state:sync', pollForChanges);
 }

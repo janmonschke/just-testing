@@ -113,5 +113,5 @@ _.defer(function(){
   copy.c.e[3].h = 2;
   var diff = jsondiffpatch.diff(data, copy);
   jsondiffpatch.patch(data, diff);
-  Backbone.trigger('sync');
+  Backbone.trigger('state:sync');
 });
