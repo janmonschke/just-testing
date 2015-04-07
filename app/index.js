@@ -1,5 +1,6 @@
 var jsondiffpatch = require('jsondiffpatch').create(),
     ObserverView  = require('./observer_view'),
+    Backbone      = require('backbone'),
     _             = require('underscore');
 
 var data = {
@@ -112,4 +113,5 @@ _.defer(function(){
   copy.c.e[3].h = 2;
   var diff = jsondiffpatch.diff(data, copy);
   jsondiffpatch.patch(data, diff);
+  Backbone.trigger('sync');
 });
