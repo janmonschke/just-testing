@@ -1,0 +1,18 @@
+{
+  "name": "sampling",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "watchify app/index.js -o public/bundle.js -v"
+  },
+  "author": "Jan Monschke",
+  "license": "MIT",
+  "dependencies": {
+    "backbone": "^1.1.2",
+    "jsondiffpatch": "^0.1.31",
+    "observe-js": "^0.4.2",
+    "tone": "^0.4.2",
+    "underscore": "^1.8.3"
+  }
+}
