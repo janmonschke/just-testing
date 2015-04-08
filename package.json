@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "./node_modules/watchify/bin/cmd.js app/index.js -o public/bundle.js -v"
+    "build": "./node_modules/watchify/bin/cmd.js app/index.js -o public/bundle.js -v",
+    "start": "node server.js",
+    "test": "mocha test/**/*.js"
   },
   "author": "Jan Monschke",
   "license": "MIT",
@@ -13,7 +15,12 @@
     "html-to-vdom": "^0.5.5",
     "jquery": "^2.1.3",
     "jsondiffpatch": "^0.1.31",
+    "mocha": "^2.2.4",
+    "node-static": "^0.7.6",
     "observe-js": "^0.4.2",
+    "sinon": "^1.14.1",
+    "socket.io": "^1.3.5",
+    "socket.io-client": "^1.3.5",
     "tone": "^0.4.2",
     "underscore": "^1.8.3",
     "virtual-dom": "^2.0.1",

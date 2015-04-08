@@ -1,7 +1,9 @@
-var jsondiffpatch = require('jsondiffpatch').create(),
-    ObserverView  = require('./observer_view'),
-    Backbone      = require('backbone'),
-    _             = require('underscore');
+var jsondiffpatch   = require('jsondiffpatch').create(),
+    ObserverView    = require('./observer_view'),
+    DiffSync        = require('./diffsync'),
+    socketIO        = require('socket.io-client'),
+    Backbone        = require('backbone'),
+    _               = require('underscore');
 
 var data = {
   a: 1,
@@ -16,8 +18,10 @@ var copy = null;
 
 var NormalView = ObserverView.extend({
   events: {
-    'click button': function(){
-      this.model.c.e.push({hero: true});
+    'click button': function(e){
+      e.preventDefault();
+      //this.model.c.e.push({hero: true});
+      (new DiffSync.Client(socketIO(), 'sdf')).initialize();
     }
   },
   template: _.template('<button><%- a %></button>')
