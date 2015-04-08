@@ -10,13 +10,30 @@ var Backbone    = require('backbone'),
     convertHTML = require('html-to-vdom')({
       VNode: require('virtual-dom/vnode/vnode'),
       VText: require('virtual-dom/vnode/vtext')
-    });
+    }),
+    support     = require('./support');
 
 Backbone.$ = $;
 
 module.exports = Backbone.View.extend({
   initialize: function(model){
     this.model = model;
+  },
+
+  delegateEvents: function(events) {
+    var key, newKey, oldValue;
+    this.events = this.events || events;
+    for (key in this.events) {
+      if (key.indexOf('click') === 0) {
+        if (support.IS_MOBILE) {
+          newKey = key.replace('click', 'touchend');
+          oldValue = this.events[key];
+          this.events[newKey] = oldValue;
+          delete this.events[key];
+        }
+      }
+    }
+    return Backbone.View.prototype.delegateEvents.call(this, this.events);
   },
 
   setElement: function() {
