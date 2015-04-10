@@ -4,10 +4,9 @@ var _             = require('underscore'),
     }),
     COMMANDS      = {
       syncWithServer: 'send-edit',
-      getInitialVersion: 'get-latest-document-version',
       remoteUpdateIncoming: 'updated-doc'
     },
-    utils, Client;
+    utils, Client, Server, InMemoryDataAdapter;
 
 utils = {
   deepCopy: function(obj){
@@ -32,7 +31,15 @@ Client = function(socket, room){
     diffs: []
   };
 
-  _.bindAll(this, '_onConnected', 'syncWithServer', 'applyServerEdit');
+  _.bindAll(this, '_onConnected', 'syncWithServer', 'applyServerEdit', 'applyServerEdits');
+};
+
+/**
+ * Get the data
+ * @return {Object} [description]
+ */
+Client.prototype.getData = function(){
+  return this.doc.localCopy;
 };
 
 /**
@@ -172,21 +179,32 @@ Client.prototype.sendEdits = function(editMessage){
   this.socket.emit(COMMANDS.syncWithServer, editMessage, this.applyServerEdits);
 };
 
-Client.prototype.applyServerEdits = _.noop;
-// applyServerEdits: function(serverEdits){
-//   if(serverEdits && serverEdits.localVersion == this.doc.localVersion){
-//     // 0) delete all previous edits
-//     this.doc.edits = [];
-//     // 1) iterate over all edits
-//     serverEdits.edits.forEach(this.applyServerEdit.bind(this));
-//   }else{
-//     console.log('rejected patch because localVersions don\'t match');
-//   }
+/**
+ * Applies all edits from the server and notfies about changes
+ * @param  {Object} serverEdits The edits message
+ */
+Client.prototype.applyServerEdits = function(serverEdits){
+  if(serverEdits && serverEdits.localVersion === this.doc.localVersion){
+    // 0) delete all previous edits
+    this.doc.edits = [];
+    // 1) iterate over all edits
+    serverEdits.edits.forEach(this.applyServerEdit);
+  }else{
+    // Rejected patch because localVersions don't match
+    this.onError('REJECTED_PATCH');
+  }
 
-//   this.syncing = false;
-//   this.scheduled = false;
-// },
+  // we are not syncing any more
+  this.syncing = false;
 
+  // notify about sync
+  this.onSynced();
+
+  // if a sync has been scheduled, sync again
+  if(this.scheduled) {
+    this.syncWithServer();
+  }
+};
 
 /**
  * Applies a single edit message to the local copy and the shadow
@@ -198,29 +216,67 @@ Client.prototype.applyServerEdit =  function(editMessage){
   if(editMessage.localVersion === this.doc.localVersion &&
     editMessage.serverVersion === this.doc.serverVersion){
 
-    // versions match
-    // 3) patch the shadow
-    this.applyPatchTo(this.doc.shadow, editMessage.diff);
-
-    // 4) increase the version number for the shadow if diff not empty
     if(!_.isEmpty(editMessage.diff)){
+      // versions match
+      // 3) patch the shadow
+      this.applyPatchTo(this.doc.shadow, editMessage.diff);
+
+      // 4) increase the version number for the shadow if diff not empty
       this.doc.serverVersion++;
+      // apply the patch to the local document
+      // IMPORTANT: Use a copy of the diff, or newly created objects will be copied by reference!
+      this.applyPatchTo(this.doc.localCopy, utils.deepCopy(editMessage.diff));
     }
-    // apply the patch to the local document
-    // IMPORTANT: Use a copy of the diff, or newly created objects will be copied by reference!
-    this.applyPatchTo(this.doc.localCopy, utils.deepCopy(editMessage.diff));
 
     return true;
   }else{
-    // TODO: check in the algo paper what should happen in the case of not mathing version numbers
+    // TODO: check in the algo paper what should happen in the case of not matching version numbers
     return false;
   }
 };
 
 Client.prototype.onConnected = _.noop;
 Client.prototype.onSynced = _.noop;
+Client.prototype.onError = _.noop;
+
+Server = function(adapter){
+  this.adapter = adapter;
+};
+
+/**
+ * A dumb in-memory data store. Do not use in production.
+ * Only for demo purposes.
+ * @param {Object} cache
+ */
+InMemoryDataAdapter = function(cache){
+  // `stores` all data
+  this.cache = cache || {};
+};
+
+/**
+ * Get the data specified by the id
+ * @param  {String/Number}   id ID for the requested data
+ * @param  {Function} cb
+ */
+InMemoryDataAdapter.prototype.getData = function(id, cb){
+  var data = this.cache[id];
+  if(!data){
+    this.cache[id] = {};
+  }
+  cb(null, this.cache[id]);
+};
+
+/**
+ * Stores `data` at `id`
+ */
+InMemoryDataAdapter.storeData = function(id, data, cb){
+  this.cache[id] = data;
+  cb(null);
+};
 
 module.exports = {
   Client: Client,
+  Server: Server,
+  InMemoryDataAdapter: InMemoryDataAdapter,
   COMMANDS: COMMANDS
 };

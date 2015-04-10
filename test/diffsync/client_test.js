@@ -47,6 +47,15 @@ describe('DiffSync Client', function(){
     });
   });
 
+  describe('getData', function(){
+    it('should return the correct object', function(){
+      var client = testClient();
+
+      assert.deepEqual(client.doc.localCopy, client.getData());
+      assert.strictEqual(client.doc.localCopy, client.getData());
+    });
+  });
+
   describe('_onConnected', function(){
     var client;
     beforeEach(function(){
@@ -230,14 +239,77 @@ describe('DiffSync Client', function(){
     });
   });
 
+  describe('applyServerEdits', function(){
+    var client;
+    beforeEach(function(){
+      client = testClient();
+    });
+
+    it('resets the syncing flag', function(){
+      client.syncing = true;
+      client.applyServerEdits();
+
+      assert(!client.syncing);
+    });
+
+    it('inits a new sync cycle only if scheduled flag is set', function(){
+      var spy = sinon.spy(client, 'syncWithServer');
+
+      client.applyServerEdits();
+
+      assert(!spy.called);
+
+      client.scheduled = true;
+      client.applyServerEdits();
+
+      assert(spy.called);
+    });
+
+    it('calls error callback if `local` version numbers do not match', function(){
+      var spy = sinon.spy(client, 'onError');
+
+      client.doc.localVersion = 1;
+      client.applyServerEdits({localVersion: 0});
+
+      assert(spy.called);
+    });
+
+    it('calls `applyServerEdit` for each edit', function(){
+      var spy = sinon.spy(client, 'applyServerEdit');
+
+      client.applyServerEdits({localVersion: 0, edits: [{a: 1}, {b: 1}]});
+
+      assert(spy.calledTwice);
+    });
+
+    it('resets the local edits list', function(){
+      // too lazy to add real diffs here
+      client.applyServerEdit = _.noop;
+
+      client.doc.edits = [{}];
+      client.applyServerEdits({localVersion: 0, edits: [{a: 1}, {b: 1}]});
+
+      assert(client.doc.edits.length === 0);
+    });
+
+    it('calls `onSynced` after applying all updates', function(){
+      var spy = sinon.spy(client, 'onSynced');
+
+      client.applyServerEdits({localVersion: 0, edits: [{a: 1}, {b: 1}]});
+
+      assert(spy.called);
+    });
+  });
+
   describe('applyServerEdit', function(){
-    var client, edit, diff, serverData;
+    var client, edit, diff, serverData, emptyDiff;
 
     beforeEach(function(){
       client = testClient();
       client._onConnected(testData());
       serverData = testData();
       serverData.b[0].c = 2;
+      serverData.b.push({newObject: true});
 
       diff = JSON.parse(JSON.stringify(jsondiffpatch.diff(client.doc.localCopy, serverData)));
       edit = {
@@ -245,14 +317,48 @@ describe('DiffSync Client', function(){
         serverVersion: client.doc.serverVersion,
         diff: diff
       };
+
+      emptyDiff = jsondiffpatch.diff({}, {});
     });
 
     it('should apply the server changes and copy all values', function(){
       assert.notEqual(client.doc.localCopy.b[0].c, serverData.b[0].c, 'local version and remote version differ');
-      client.applyServerEdit(edit);
+
+      var success = client.applyServerEdit(edit);
+
+      assert(success, 'a valid edit has been applied');
       assert.equal(client.doc.localCopy.b[0].c, serverData.b[0].c, 'local version and remote version are equal');
       assert.deepEqual(client.doc.localCopy, client.doc.shadow, 'local version and shadow version are deep equal');
-      assert.deepEqual(client.doc.localCopy.b[0], client.doc.shadow.b[0], 'local version and shadow version are not the same references');
+      assert.notStrictEqual(client.doc.localCopy.b[0], client.doc.shadow.b[0], 'local version and shadow version are not the same references');
+      assert.deepEqual(client.doc.localCopy.b[1], client.doc.shadow.b[1], 'local version and shadow version are not the same references');
+      assert.notStrictEqual(client.doc.localCopy.b[1], client.doc.shadow.b[1], 'local version and shadow version are not the same references');
+    });
+
+    it('should reject edits with wrong version numbers', function(){
+      assert.notEqual(client.doc.localCopy.b[0].c, serverData.b[0].c, 'local version and remote version differ');
+
+      edit.localVersion = client.doc.localVersion + 1;
+      var success = client.applyServerEdit(edit);
+
+      assert.notEqual(client.doc.localCopy.b[0].c, serverData.b[0].c, 'local version and remote version still differ');
+      assert(!success, 'the edit is invalid');
+    });
+
+    it('updates the server version if diff was not empty', function(){
+      var serverVersion = client.doc.serverVersion;
+
+      client.applyServerEdit(edit);
+
+      assert(client.doc.serverVersion === (serverVersion + 1));
+    });
+
+    it('does not update the server version if diff was empty', function(){
+      var serverVersion = client.doc.serverVersion;
+
+      edit.diff = emptyDiff;
+      client.applyServerEdit(edit);
+
+      assert(client.doc.serverVersion === serverVersion);
     });
   });
 
