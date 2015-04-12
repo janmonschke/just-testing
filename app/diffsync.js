@@ -3,6 +3,7 @@ var _             = require('underscore'),
       objectHash: function(obj) { return obj.id || obj._id || JSON.stringify(obj); }
     }),
     COMMANDS      = {
+      join: 'join',
       syncWithServer: 'send-edit',
       remoteUpdateIncoming: 'updated-doc'
     },
@@ -49,7 +50,7 @@ Client.prototype.getData = function(){
 Client.prototype.initialize = function(){
   // connect, join room and initialize
   this.syncing = true;
-  this.socket.emit('join', this.room, this._onConnected);
+  this.socket.emit(COMMANDS.join, this.room, this._onConnected);
 };
 
 /**
@@ -239,8 +240,42 @@ Client.prototype.onConnected = _.noop;
 Client.prototype.onSynced = _.noop;
 Client.prototype.onError = _.noop;
 
-Server = function(adapter){
+Server = function(adapter, transport){
+  if(!(adapter && transport)){ throw new Error('Need to specify an adapter and a transport'); }
+
   this.adapter = adapter;
+  this.transport = transport;
+  this.data = {};
+
+  _.bindAll(this, 'trackConnection');
+};
+
+Server.prototype.initialize = function(){
+  this.transport.on('connection', this.trackConnection);
+};
+
+Server.prototype.trackConnection = function(connection){
+  var withConnection = function(context, actual){
+    return function(){
+      var args = _.toArray(arguments);
+      args.unshift(connection);
+      actual.apply(context, args);
+    };
+  };
+
+  connection.on(COMMANDS.join, withConnection(this, this.joinConnection));
+  connection.on(COMMANDS.syncWithServer, withConnection(this, this.receiveEdit));
+};
+
+Server.prototype.joinConnection = function(connection, room, initializeClient){
+  this.getData(room, function(error, data){
+    connection.join(room);
+    initializeClient(data);
+  });
+};
+
+Server.prototype.receiveEdit = function(connection, edit, sendToClient){
+
 };
 
 /**
