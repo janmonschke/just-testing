@@ -254,6 +254,10 @@ Server.prototype.initialize = function(){
   this.transport.on('connection', this.trackConnection);
 };
 
+/**
+ * Registers the correct event listeners
+ * @param  {Connection} connection The connection that should get tracked
+ */
 Server.prototype.trackConnection = function(connection){
   var withConnection = function(context, actual){
     return function(){
@@ -267,11 +271,65 @@ Server.prototype.trackConnection = function(connection){
   connection.on(COMMANDS.syncWithServer, withConnection(this, this.receiveEdit));
 };
 
+/**
+ * Joins a connection to a room and send the initial data
+ * @param  {Connection} connection
+ * @param  {String} room             room identifier
+ * @param  {Function} initializeClient Callback that is being used for initialization of the client
+ */
 Server.prototype.joinConnection = function(connection, room, initializeClient){
   this.getData(room, function(error, data){
     connection.join(room);
-    initializeClient(data);
+
+    initializeClient(data.serverCopy);
   });
+};
+
+Server.prototype.prepareClientData = function(data){
+  doc.clientVersions[socketId] = {
+    backup: {
+      doc: deepCopy(baseDoc),
+      serverVersion: 0
+    },
+    shadow: {
+      doc: deepCopy(baseDoc),
+      serverVersion: 0,
+      localVersion: 0
+    },
+    edits: []
+  };
+
+  send({
+    doc: baseDoc,
+    version: 0
+  });
+};
+
+/**
+ * Gets data for a room from the internal cache or from the adapter
+ * @param  {String}   room     room identifier
+ * @param  {Function} callback notifier-callback
+ */
+Server.prototype.getData = function(room, callback){
+  var cachedVersion = this.data[room],
+      cache = this.data;
+
+  if(cachedVersion){
+    callback(cachedVersion);
+  }else{
+    this.adapter.getData(room, function(error, data){
+      // don't override if created in meantime
+      if(!cache[room]){
+        cache[room] = {
+          registeredSockets: [],
+          clientVersions: {},
+          serverCopy: data
+        };
+      }
+
+      callback(cache[room]);
+    });
+  }
 };
 
 Server.prototype.receiveEdit = function(connection, edit, sendToClient){
